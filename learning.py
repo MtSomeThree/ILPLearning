@@ -1,5 +1,6 @@
 import gurobipy as grb
 import numpy as np
+from scipy.linalg import null_space
 
 def init_GRB(N, arc):
 	m = grb.Model('mst')
@@ -13,6 +14,20 @@ def add_data_point(model, z, w, x, arc, cnt):
 	tmp = sum([w[i, j] * x[i, j] for (i, j) in arc])
 	#print (tmp)
 	model.addConstr(sum(z[i, j] * w[i, j] for i, j in arc) >= tmp, "data%d"%(cnt))
+
+def add_equation_const(model, z, zero_space, one_to_two, dim):
+	theta = 1e-2
+	num_const = zero_space.shape[1]
+	for const_idx in range(num_const):
+		w = dict()
+		arc = set()
+		for j in range(dim):
+			idx1, idx2 = one_to_two[j]
+			arc.add((idx1, idx2))
+			w[(idx1, idx2)] = zero_space[j][const_idx]
+		tmp = -zero_space[dim][const_idx]
+		model.addConstr(sum(z[i, j] * w[i, j] for i, j in arc) >= tmp - theta, "eq%d_lower"%(i))
+		model.addConstr(sum(z[i, j] * w[i, j] for i, j in arc) <= tmp + theta, "eq%d_upper"%(i))
 
 def get_weight_matrix(data_file, N):
 	cnt = 0
@@ -38,10 +53,22 @@ def get_solution_matrix(data_file, N):
 			break
 	return np.array(sol)
 
+def get_mapping(N):
+	two_to_one = dict()
+	one_to_two = dict()
+	cnt = 0
+	for i in range(N + 1):
+		for j in range(i + 1, N + 1):
+			two_to_one[i, j] = cnt
+			one_to_two[cnt] = (i, j)
+			cnt += 1
+	return two_to_one, one_to_two, cnt
+
 
 if __name__ == '__main__':	
 
 	N = 6
+	two_to_one, one_to_two, dim = get_mapping(N)
 
 	train_file = open('train.txt', 'r')
 	test_file = open('test.txt', 'r')
@@ -65,6 +92,9 @@ if __name__ == '__main__':
 	print (model.Params.MarkowitzTol)
 	'''
 	
+	matrix_w = []
+	matrix_x = []
+
 	cnt = 0
 	while(True):
 		w = get_weight_matrix(train_file, N)
@@ -73,6 +103,22 @@ if __name__ == '__main__':
 			break
 		add_data_point(model, z, w, x, arc, cnt)
 		cnt += 1
+		vector_w = []
+		vector_x = []
+		for i in range(dim):
+			idx1, idx2 = one_to_two[i]
+			vector_w.append(w[idx1, idx2])
+			vector_x.append(x[idx1, idx2])
+		matrix_w.append(vector_w)
+		matrix_x.append(vector_x)
+
+	#set_size_evaluate(data_w, data_x)
+	matrix_w = np.array(matrix_w)
+	matrix_x = np.array(matrix_x)
+	ones = np.ones(cnt)
+	matrix_x = np.c_[matrix_x, ones]
+	zero_space = null_space(matrix_x)
+	add_equation_const(model, z, zero_space, one_to_two, dim)
 
 	cnt = 0
 	correct = 0
