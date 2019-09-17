@@ -95,14 +95,14 @@ def upper_bound_solve(model, z, w, x, out_file):
 if __name__ == '__main__':	
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--N", type=int, default=6)
-	parser.add_argument("--equation", type=bool, default=False)
+	parser.add_argument("--equation", action='store_true')
 	parser.add_argument("--out_file", type=str, default='result.txt')
 	args = parser.parse_args()
 	N = args.N
 	two_to_one, one_to_two, dim = get_mapping(N)
 
-	train_file = open('train_71_8.txt', 'r')
-	test_file = open('test_71_8.txt', 'r')
+	train_file = open('train.txt', 'r')
+	test_file = open('test.txt', 'r')
 	out_file = open(args.out_file, 'w')
 
 	arc = set()
@@ -166,4 +166,6 @@ if __name__ == '__main__':
 		if loss == 0:
 			correct += 1
 		#print ("Test Case #%d, wrong variable: %d"%(cnt, int(loss / 2)))
+		if cnt % 50 == 0:
+			print ("Test Case %d processed"%(cnt))
 	print ("Exact Match Accuracy: %d%%(%d/%d), average wrong: %f"%(int(correct * 100 / cnt), correct, cnt, error / (cnt * 2)))

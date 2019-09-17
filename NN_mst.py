@@ -125,5 +125,5 @@ if __name__ == '__main__':
 		if wrong == 0:
 			correct += 1
 		error += wrong
-	print ("Exact Match Accuracy: %d%%(%d/%d), average wrong: %f"%(int(correct * 100 / cnt), correct, cnt, error / cnt))
+	print ("Exact Match Accuracy: %d%%(%d/%d), average wrong: %f(%d/%d)"%(int(correct * 100 / cnt), correct, cnt, float(error) / float(cnt), error, cnt))
 
