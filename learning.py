@@ -3,11 +3,12 @@ import numpy as np
 import argparse
 from scipy.linalg import null_space
 
-def init_GRB(N, arc):
+def init_GRB(arc, task):
 	m = grb.Model('mst')
 	z = m.addVars(arc, vtype=grb.GRB.BINARY, name='z')
 
-	m.addConstrs((z[i, j] == z[j, i] for i, j in arc), "sym")
+	if task == 'MST':
+		m.addConstrs((z[i, j] == z[j, i] for i, j in arc), "sym")
 
 	return m, z
 
@@ -38,7 +39,7 @@ def get_weight_matrix(data_file, N):
 		tmp = [float(x) for x in tmp]
 		weight.append(tmp)
 		cnt += 1
-		if cnt == N + 1:
+		if cnt == N:
 			break
 	return np.array(weight)
 
@@ -50,36 +51,43 @@ def get_solution_matrix(data_file, N):
 		tmp = [int(x) for x in tmp]
 		sol.append(tmp)
 		cnt += 1
-		if cnt == N + 1:
+		if cnt == N:
 			break
 	return np.array(sol)
 
-def get_mapping(N):
+def get_mapping(N, task):
 	two_to_one = dict()
 	one_to_two = dict()
-	cnt = 0
-	for i in range(N + 1):
-		for j in range(i + 1, N + 1):
-			two_to_one[i, j] = cnt
-			one_to_two[cnt] = (i, j)
-			cnt += 1
+	if task == 'MST':
+		cnt = 0
+		for i in range(N):
+			for j in range(i + 1, N):
+				two_to_one[i, j] = cnt
+				one_to_two[cnt] = (i, j)
+				cnt += 1
+	else:
+		cnt = 0
+		for i in range(N):
+			for j in range(N):
+				two_to_one[i, j] = cnt
+				one_to_two[cnt] = (i, j)
+				cnt += 1
+
 	return two_to_one, one_to_two, cnt
 
-def upper_bound_solve(model, z, w, x, out_file):
-	model.setObjective(sum(z[i, j] * w[i, j] for i, j in arc))
-	model.optimize()
+def get_variable_arc(N, task):
+	arc = set()
+	for i in range(N):
+		for j in range(N):
+			arc.add((i, j))
+	return arc
 
-	solution = np.zeros((N + 1, N + 1))
-	for v in model.getVars():
-		if v.varName[0] == 'z':
-			index = eval(v.varName[1:])
-			solution[index[0], index[1]] = v.x
-
+def get_loss(solution, w, x, out_file):
 	loss = 0
 	gold_obj = 0.0
 	my_obj = 0.0
-	for i in range(N + 1):
-		for j in range(N + 1):
+	for i in range(N):
+		for j in range(N):
 			gold_obj += x[i, j] * w[i, j]
 			my_obj += solution[i, j] * w[i, j]
 			if x[i, j] != solution[i, j]:
@@ -89,28 +97,53 @@ def upper_bound_solve(model, z, w, x, out_file):
 				out_file.write(" (%d/%d)  "%(x[i, j], solution[i, j]))
 		out_file.write("\n")
 	out_file.write("Test Case #%d, wrong variable: %d, gold_obj: %f, my_obj: %f\n"%(cnt, loss, gold_obj, my_obj))
-	return loss
+	return loss / 2
 
+def upper_bound_solve(model, z, w, x, out_file):
+	model.setObjective(sum(z[i, j] * w[i, j] for i, j in arc))
+	model.optimize()
+
+	solution = np.zeros((N, N))
+	for v in model.getVars():
+		if v.varName[0] == 'z':
+			index = eval(v.varName[1:])
+			solution[index[0], index[1]] = v.x
+
+	return get_loss(solution, w, x, out_file)
+
+def lower_bound_solve(data_x, w, x, out_file):
+	M = len(data_x)
+	opt_obj = 1e+8
+	opt_idx = -1
+	for i in range(M):
+		tmp = (w * data_x[i]).sum()
+		if tmp < opt_obj:
+			opt_obj = tmp
+			opt_idx = i
+	solution = data_x[opt_idx]
+
+	return get_loss(solution, w, x, out_file)
 
 if __name__ == '__main__':	
 	parser = argparse.ArgumentParser()
-	parser.add_argument("--N", type=int, default=6)
+	parser.add_argument("--N", type=int, default=7)
+	parser.add_argument("--task", type=str, default='MST')
 	parser.add_argument("--equation", action='store_true')
 	parser.add_argument("--out_file", type=str, default='result.txt')
+	parser.add_argument("--train_file", type=str, default='train.txt')
+	parser.add_argument("--test_file", type=str, default='test.txt')
 	args = parser.parse_args()
-	N = args.N
-	two_to_one, one_to_two, dim = get_mapping(N)
 
-	train_file = open('train.txt', 'r')
-	test_file = open('test.txt', 'r')
+	N = args.N
+
+	train_file = open(args.train_file, 'r')
+	test_file = open(args.test_file, 'r')
 	out_file = open(args.out_file, 'w')
 
-	arc = set()
-	for i in range(N + 1):
-		for j in range(N + 1):
-			arc.add((i, j))
+	arc = get_variable_arc(N, args.task)
+	two_to_one, one_to_two, dim = get_mapping(N, args.task)
 
-	model, z = init_GRB(N, arc)
+	model, z = init_GRB(arc, args.task)
 	model.setParam("MIPGap", 0.0)
 	model.setParam("OutputFlag", 0)
 	'''
@@ -118,13 +151,11 @@ if __name__ == '__main__':
 	model.setParam("FeasibilityTol", 1e-8)
 	model.setParam("IntFeasTol", 1e-8)
 	print (model.Params.OptimalityTol)
-	print (model.Params.FeasibilityTol)
-	print (model.Params.IntFeasTol)
-	print (model.Params.MarkowitzTol)
 	'''
 	
 	matrix_w = []
 	matrix_x = []
+	data_x = []
 
 	cnt = 0
 	while(True):
@@ -133,6 +164,7 @@ if __name__ == '__main__':
 		if w.size == 0:
 			break
 		add_data_point(model, z, w, x, arc, cnt)
+		data_x.append(x)
 		cnt += 1
 		vector_w = []
 		vector_x = []
@@ -147,25 +179,31 @@ if __name__ == '__main__':
 	matrix_w = np.array(matrix_w)
 	matrix_x = np.array(matrix_x)
 	ones = np.ones(cnt)
-	matrix_x = np.c_[matrix_x, ones]
-	zero_space = null_space(matrix_x)
+	zero_space = null_space(np.c_[matrix_x, ones])
 	if args.equation:
 		add_equation_const(model, z, zero_space, one_to_two, dim)
 
 	cnt = 0
-	correct = 0
-	error = 0
+	correct_u = 0
+	correct_l = 0
+	error_u = 0.0
+	error_l = 0.0
 	while(True):
 		w = get_weight_matrix(test_file, N)
 		x = get_solution_matrix(test_file, N)
 		if w.size == 0:
 			break
-		loss = upper_bound_solve(model, z, w, x, out_file)
+		loss_u = upper_bound_solve(model, z, w, x, out_file)
+		loss_l = lower_bound_solve(data_x, w, x, out_file)
 		cnt += 1
-		error += loss
-		if loss == 0:
-			correct += 1
-		#print ("Test Case #%d, wrong variable: %d"%(cnt, int(loss / 2)))
-		if cnt % 50 == 0:
-			print ("Test Case %d processed"%(cnt))
-	print ("Exact Match Accuracy: %d%%(%d/%d), average wrong: %f"%(int(correct * 100 / cnt), correct, cnt, error / (cnt * 2)))
+		error_u += loss_u
+		error_l += loss_l
+		if loss_u == 0:
+			correct_u += 1
+		if loss_l == 0:
+			correct_l += 1
+		print ("Test Case #%d, upper, wrong variable: %d"%(cnt, int(loss_u / 2)))
+		print ("Test Case #%d, lower, wrong variable: %d"%(cnt, int(loss_l / 2)))
+
+	print ("Upper Bound Exact Match Accuracy: %d%%(%d/%d), average wrong: %f"%(int(correct_u * 100 / cnt), correct_u, cnt, error_u / float(cnt)))
+	print ("Lower Bound Exact Match Accuracy: %d%%(%d/%d), average wrong: %f"%(int(correct_l * 100 / cnt), correct_l, cnt, error_l / float(cnt)))
