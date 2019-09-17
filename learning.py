@@ -70,8 +70,8 @@ if __name__ == '__main__':
 	N = 6
 	two_to_one, one_to_two, dim = get_mapping(N)
 
-	train_file = open('train.txt', 'r')
-	test_file = open('test.txt', 'r')
+	train_file = open('train_71_8.txt', 'r')
+	test_file = open('test_71_8.txt', 'r')
 	out_file = open('result.txt', 'w')
 
 	arc = set()
@@ -118,10 +118,11 @@ if __name__ == '__main__':
 	ones = np.ones(cnt)
 	matrix_x = np.c_[matrix_x, ones]
 	zero_space = null_space(matrix_x)
-	add_equation_const(model, z, zero_space, one_to_two, dim)
+	#add_equation_const(model, z, zero_space, one_to_two, dim)
 
 	cnt = 0
 	correct = 0
+	error = 0
 	while(True):
 		w = get_weight_matrix(test_file, N)
 		x = get_solution_matrix(test_file, N)
@@ -152,7 +153,8 @@ if __name__ == '__main__':
 			out_file.write("\n")
 		out_file.write("Test Case #%d, wrong variable: %d, gold_obj: %f, my_obj: %f\n"%(cnt, loss, gold_obj, my_obj))
 		cnt += 1
+		error += loss
 		if loss == 0:
 			correct += 1
 		print ("Test Case #%d, wrong variable: %d"%(cnt, int(loss / 2)))
-	print ("Exact Match Accuracy: %d%%(%d/%d)"%(int(correct * 100 / cnt), correct, cnt))
+	print ("Exact Match Accuracy: %d%%(%d/%d), average wrong: %f"%(int(correct * 100 / cnt), correct, cnt, error / (cnt * 2)))
