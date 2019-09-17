@@ -166,3 +166,15 @@ Gurobi 8.1.1 (linux64, Python) logging started Mon Sep 16 17:21:02 2019
 Academic license - for non-commercial use only
 Changed value of parameter MIPGap to 0.0
    Prev: 0.0001  Min: 0.0  Max: 1e+100  Default: 0.0001
+
+Gurobi 8.1.0 (win64, Python) logging started 09/16/19 17:33:43
+
+Academic license - for non-commercial use only
+Changed value of parameter MIPGap to 0.0
+   Prev: 0.0001  Min: 0.0  Max: 1e+100  Default: 0.0001
+
+Gurobi 8.1.0 (win64, Python) logging started 09/16/19 17:42:14
+
+Academic license - for non-commercial use only
+Changed value of parameter MIPGap to 0.0
+   Prev: 0.0001  Min: 0.0  Max: 1e+100  Default: 0.0001

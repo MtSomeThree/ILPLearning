@@ -1,5 +1,6 @@
 import gurobipy as grb
 import numpy as np
+import argparse
 from scipy.linalg import null_space
 
 def init_GRB(N, arc):
@@ -64,15 +65,45 @@ def get_mapping(N):
 			cnt += 1
 	return two_to_one, one_to_two, cnt
 
+def upper_bound_solve(model, z, w, x, out_file):
+	model.setObjective(sum(z[i, j] * w[i, j] for i, j in arc))
+	model.optimize()
+
+	solution = np.zeros((N + 1, N + 1))
+	for v in model.getVars():
+		if v.varName[0] == 'z':
+			index = eval(v.varName[1:])
+			solution[index[0], index[1]] = v.x
+
+	loss = 0
+	gold_obj = 0.0
+	my_obj = 0.0
+	for i in range(N + 1):
+		for j in range(N + 1):
+			gold_obj += x[i, j] * w[i, j]
+			my_obj += solution[i, j] * w[i, j]
+			if x[i, j] != solution[i, j]:
+				loss += 1
+				out_file.write("![%d/%d]! "%(x[i, j], solution[i, j]))
+			else:
+				out_file.write(" (%d/%d)  "%(x[i, j], solution[i, j]))
+		out_file.write("\n")
+	out_file.write("Test Case #%d, wrong variable: %d, gold_obj: %f, my_obj: %f\n"%(cnt, loss, gold_obj, my_obj))
+	return loss
+
 
 if __name__ == '__main__':	
-
-	N = 6
+	parser = argparse.ArgumentParser()
+	parser.add_argument("--N", type=int, default=6)
+	parser.add_argument("--equation", type=bool, default=False)
+	parser.add_argument("--out_file", type=str, default='result.txt')
+	args = parser.parse_args()
+	N = args.N
 	two_to_one, one_to_two, dim = get_mapping(N)
 
 	train_file = open('train_71_8.txt', 'r')
 	test_file = open('test_71_8.txt', 'r')
-	out_file = open('result.txt', 'w')
+	out_file = open(args.out_file, 'w')
 
 	arc = set()
 	for i in range(N + 1):
@@ -118,7 +149,8 @@ if __name__ == '__main__':
 	ones = np.ones(cnt)
 	matrix_x = np.c_[matrix_x, ones]
 	zero_space = null_space(matrix_x)
-	#add_equation_const(model, z, zero_space, one_to_two, dim)
+	if args.equation:
+		add_equation_const(model, z, zero_space, one_to_two, dim)
 
 	cnt = 0
 	correct = 0
@@ -128,33 +160,10 @@ if __name__ == '__main__':
 		x = get_solution_matrix(test_file, N)
 		if w.size == 0:
 			break
-
-		model.setObjective(sum(z[i, j] * w[i, j] for i, j in arc))
-		model.optimize()
-
-		solution = np.zeros((N + 1, N + 1))
-		for v in model.getVars():
-			if v.varName[0] == 'z':
-				index = eval(v.varName[1:])
-				solution[index[0], index[1]] = v.x
-
-		loss = 0
-		gold_obj = 0.0
-		my_obj = 0.0
-		for i in range(N + 1):
-			for j in range(N + 1):
-				gold_obj += x[i, j] * w[i, j]
-				my_obj += solution[i, j] * w[i, j]
-				if x[i, j] != solution[i, j]:
-					loss += 1
-					out_file.write("![%d/%d]! "%(x[i, j], solution[i, j]))
-				else:
-					out_file.write(" (%d/%d)  "%(x[i, j], solution[i, j]))
-			out_file.write("\n")
-		out_file.write("Test Case #%d, wrong variable: %d, gold_obj: %f, my_obj: %f\n"%(cnt, loss, gold_obj, my_obj))
+		loss = upper_bound_solve(model, z, w, x, out_file)
 		cnt += 1
 		error += loss
 		if loss == 0:
 			correct += 1
-		print ("Test Case #%d, wrong variable: %d"%(cnt, int(loss / 2)))
+		#print ("Test Case #%d, wrong variable: %d"%(cnt, int(loss / 2)))
 	print ("Exact Match Accuracy: %d%%(%d/%d), average wrong: %f"%(int(correct * 100 / cnt), correct, cnt, error / (cnt * 2)))
