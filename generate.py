@@ -40,15 +40,20 @@ if __name__ == '__main__':
 
 	N = 6
 
-	data_file = open('test.txt', 'w')
+	data_file = open('train.txt', 'w')
 	#data_file.write("%d\n"%(N))
-	for T in range(500):
+	for T in range(20000):
 		dist = np.zeros((N + 1, N + 1))
 		arc = set()
-		
+		dist_set = set()
+
 		for i in range(N + 1):
 			for j in range(i + 1, N + 1):
-				dist[i, j] = np.random.rand() - 0.5
+				tmp = np.random.rand()
+				while (tmp in dist_set):
+					tmp = np.random.rand()
+				dist_set.add(tmp)
+				dist[i, j] = tmp
 				dist[j, i] = dist[i, j]
 				arc.add((i, j))
 				arc.add((j, i))
