@@ -16,7 +16,8 @@ if __name__ == '__main__':
 	z = model.addVars(arc, vtype=grb.GRB.BINARY, name='z')
 
 	model.setParam('MIPGap', 0.0)
-	#model.setParam('OutputFlag', 0)
+	model.setParam('OutputFlag', 0)
+	model.setParam('TimeLimit', 60.0)
 
 	ones = np.ones(train_num)
 	data_1 = np.c_[data[:train_num, :], ones]
@@ -24,7 +25,7 @@ if __name__ == '__main__':
 
 	M = kernel.shape[1]
 
-	for i in range(100):
+	for i in range(M):
 		w = dict()
 		for j in range(729):
 			w[j] = kernel[j][i]
@@ -50,9 +51,9 @@ if __name__ == '__main__':
 				break
 		if flag:
 			correct += 1
-		if i % 10 == 0:
+		if i % 20 == 0:
 			print ("%d Test Cases Processed!, now acc is %f (%d/%d)."%(i - train_num + 1, float(correct) / float(i - train_num + 1), correct, i - train_num + 1))
-			break
+		#print (query[i].sum(), solution.sum(), data[i].sum())
 	print (correct)
 
 
