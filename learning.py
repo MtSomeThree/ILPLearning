@@ -1,6 +1,7 @@
 import gurobipy as grb
 import numpy as np
 import argparse
+import os
 from scipy.linalg import null_space
 
 def init_GRB(arc, task):
@@ -136,8 +137,12 @@ if __name__ == '__main__':
 
 	N = args.N
 
-	train_file = open(args.train_file, 'r')
-	test_file = open(args.test_file, 'r')
+	train_file = os.path.join('data', args.task, args.train_file)
+	test_file = os.path.join('data', args.task, args.test_file)
+	out_file = os.path.join('data', args.task, args.out_file)
+
+	train_file = open(train_file, 'r')
+	test_file = open(test_file, 'r')
 	out_file = open(args.out_file, 'w')
 
 	arc = get_variable_arc(N, args.task)

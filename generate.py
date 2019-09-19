@@ -40,7 +40,7 @@ if __name__ == '__main__':
 
 	N = 6
 
-	data_file = open('train.txt', 'w')
+	data_file = open('./data/MST/train.txt', 'w')
 	#data_file.write("%d\n"%(N))
 	for T in range(20000):
 		dist = np.zeros((N + 1, N + 1))
