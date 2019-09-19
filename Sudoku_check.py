@@ -7,8 +7,8 @@ if __name__ == '__main__':
 
 	train_num = 9000
 
-	data = np.array(torch.load('labels.pt')).reshape(-1, 729)
-	query = np.array(torch.load('features.pt')).reshape(-1, 729)
+	data = np.array(torch.load('./data/Sudoku/labels.pt')).reshape(-1, 729)
+	query = np.array(torch.load('./data/Sudoku/features.pt')).reshape(-1, 729)
 
 	arc = range(729)
 
