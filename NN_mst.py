@@ -12,7 +12,7 @@ class myModel(torch.nn.Module):
 			torch.nn.ReLU(),
 			torch.nn.Linear(hidden_dim, hidden_dim),
 			torch.nn.ReLU(),
-			torch.nn.Linear(hidden_dim, hidden_dim),
+			torch.nn.Linear(hidden_dim, output_dim),
 			torch.nn.Sigmoid()
 			)
 
@@ -74,16 +74,16 @@ def loader(data, batch_size=50):
 
 if __name__ == '__main__':
 	N = 6
-	train_data = get_data(open('train.txt', 'r'), N)
+	train_data = get_data(open('./data/MST/train.txt', 'r'), N)
 	train_loader = loader(train_data)
-	test_data = get_data(open('test.txt', 'r'), N)
+	test_data = get_data(open('./data/MST/test.txt', 'r'), N)
 	test_loader = loader(test_data, batch_size=1)
 
 	dim = int(N * (N + 1) / 2)
 
 	model = myModel(dim, dim)
 	model.cuda()
-	criterion = torch.nn.MSELoss() 
+	criterion = torch.nn.BCELoss() 
 
 	optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
