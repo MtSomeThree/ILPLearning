@@ -6,6 +6,8 @@ from scipy.linalg import null_space
 
 def init_GRB(arc, task):
 	m = grb.Model('mst')
+	m.setParam("MIPGap", 0.0)
+	m.setParam("OutputFlag", 0)
 	z = m.addVars(arc, vtype=grb.GRB.BINARY, name='z')
 
 	if task == 'MST':
@@ -14,9 +16,9 @@ def init_GRB(arc, task):
 	return m, z
 
 def add_data_point(model, z, w, x, arc, cnt):
-	tmp = sum([w[i, j] * x[i, j] for (i, j) in arc])
+	tmp = sum([w[idx] * x[idx] for idx  in arc])
 	#print (tmp)
-	model.addConstr(sum(z[i, j] * w[i, j] for i, j in arc) >= tmp, "data%d"%(cnt))
+	model.addConstr(sum(z[idx] * w[idx] for idx in arc) >= tmp, "data%d"%(cnt))
 
 def add_equation_const(model, z, zero_space, one_to_two, dim):
 	theta = 1e-2
@@ -25,12 +27,12 @@ def add_equation_const(model, z, zero_space, one_to_two, dim):
 		w = dict()
 		arc = set()
 		for j in range(dim):
-			idx1, idx2 = one_to_two[j]
-			arc.add((idx1, idx2))
-			w[(idx1, idx2)] = zero_space[j][const_idx]
+			idx = one_to_two[j]
+			arc.add(idx)
+			w[idx] = zero_space[j][const_idx]
 		tmp = -zero_space[dim][const_idx]
-		model.addConstr(sum(z[i, j] * w[i, j] for i, j in arc) >= tmp - theta, "eq%d_lower"%(i))
-		model.addConstr(sum(z[i, j] * w[i, j] for i, j in arc) <= tmp + theta, "eq%d_upper"%(i))
+		model.addConstr(sum(z[idx] * w[idx] for idx in arc) >= tmp - theta, "eq%d_lower"%(i))
+		model.addConstr(sum(z[idx] * w[idx] for idx in arc) <= tmp + theta, "eq%d_upper"%(i))
 
 def get_weight_matrix(data_file, N):
 	cnt = 0
@@ -100,8 +102,8 @@ def get_loss(solution, w, x, out_file):
 	out_file.write("Test Case #%d, wrong variable: %d, gold_obj: %f, my_obj: %f\n"%(cnt, loss, gold_obj, my_obj))
 	return loss / 2
 
-def upper_bound_solve(model, z, w, x, out_file):
-	model.setObjective(sum(z[i, j] * w[i, j] for i, j in arc))
+def upper_bound_solve(model, z, w, x, arc, out_file):
+	model.setObjective(sum(z[idx] * w[idx] for idx in arc))
 	model.optimize()
 
 	solution = np.zeros((N, N))
@@ -149,8 +151,6 @@ if __name__ == '__main__':
 	two_to_one, one_to_two, dim = get_mapping(N, args.task)
 
 	model, z = init_GRB(arc, args.task)
-	model.setParam("MIPGap", 0.0)
-	model.setParam("OutputFlag", 0)
 	'''
 	model.setParam("OptimalityTol", 1e-8)
 	model.setParam("FeasibilityTol", 1e-8)
@@ -198,7 +198,7 @@ if __name__ == '__main__':
 		x = get_solution_matrix(test_file, N)
 		if w.size == 0:
 			break
-		loss_u = upper_bound_solve(model, z, w, x, out_file)
+		loss_u = upper_bound_solve(model, z, w, x, arc, out_file)
 		loss_l = lower_bound_solve(data_x, w, x, out_file)
 		cnt += 1
 		error_u += loss_u
