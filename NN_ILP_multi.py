@@ -36,7 +36,7 @@ def loader(data_x, data_y, batch_size):
 	for i in range(num_batch):
 		yield torch.Tensor(data_x[i * batch_size: (i + 1) * batch_size]), torch.Tensor(data_y[i * batch_size: (i + 1) * batch_size])
 
-def ILP_solve(model, z, w, x, arc, N, out_file):
+def ILP_solve_upper(model, z, w, x, arc, N, out_file):
 	model.setObjective(sum(z[idx] * w[idx] for idx in arc))
 	model.optimize()
 
@@ -53,11 +53,44 @@ def ILP_solve(model, z, w, x, arc, N, out_file):
 
 	return wrong
 
+def ILP_solve_lower(data_x, w, x, N, out_file):
+	M = len(data_x)
+	opt_obj = 1e+8
+	opt_idx = -1
+	for i in range(M):
+		tmp = (w * data_x[i]).sum()
+		if tmp < opt_obj:
+			opt_obj = tmp
+			opt_idx = i
+	solution = data_x[opt_idx]
+
+	wrong = 0
+	for i in range(N):
+		if solution[i] != x[i]:
+			wrong += 1
+
+	return wrong
+
+def label_hash(y):
+	h = 0
+	for i in range(14):
+		h += y[i] * (1 << i)
+	return h
+
 if __name__ == '__main__':
 	DataDir = './data/Multi/yeast.csv'
-	TrainSize = 2200
+	TrainSize = 1500
 	out_file = open('./data/Multi/result.txt', 'w')
+	trainFlag = False
 	data_x, data_y = get_data(open(DataDir, 'r'))
+
+	label_set = set()
+	for i in range(TrainSize):
+		label_set.add(label_hash(data_y[i]))
+	print (len(label_set))
+	for i in range(TrainSize, data_x.shape[0]):
+		label_set.add(label_hash(data_y[i]))
+	print (len(label_set))
 
 	arc = set()
 	for i in range(14):
@@ -67,28 +100,35 @@ if __name__ == '__main__':
 	model = myModel(103, 14)
 	model.cuda()
 
-	criterion = torch.nn.BCELoss() 
+	if trainFlag == True:
 
-	optimizer = torch.optim.Adam(model.parameters(), lr=0.003, weight_decay=0.00001)
+		criterion = torch.nn.BCELoss() 
 
-	lossLog = []
-	for epoch in range(200):
-		total_loss = 0
-		cnt = 0
-		train_loader = loader(data_x[:TrainSize], data_y[:TrainSize], batch_size=50)
-		for x, y in train_loader:
-			x = Variable(x).cuda()
-			y = Variable(y.float()).cuda()
+		optimizer = torch.optim.Adam(model.parameters(), lr=0.002, weight_decay=0.0001)
 
-			optimizer.zero_grad()
-			outputs = model(x)
-			loss = criterion(outputs, y)
-			loss.backward()
-			optimizer.step()
-			cnt += 1
-			total_loss += loss
-		print ('epoch %d, loss %.8f'%(epoch, total_loss / cnt))
-		lossLog.append(total_loss)
+		lossLog = []
+		for epoch in range(300):
+			total_loss = 0
+			cnt = 0
+			train_loader = loader(data_x[:TrainSize], data_y[:TrainSize], batch_size=50)
+			for x, y in train_loader:
+				x = Variable(x).cuda()
+				y = Variable(y.float()).cuda()
+
+				optimizer.zero_grad()
+				outputs = model(x)
+				loss = criterion(outputs, y)
+				loss.backward()
+				optimizer.step()
+				cnt += 1
+				total_loss += loss
+			print ('epoch %d, loss %.8f'%(epoch, total_loss / cnt))
+			lossLog.append(total_loss)
+		torch.save(model.state_dict(), './model/Multi/3layers.pt')
+	else:
+		model.load_state_dict(torch.load('./model/Multi/3layers.pt'))
+
+	model.eval()
 
 	for i in range(TrainSize):
 		x = Variable(torch.Tensor(data_x[i].reshape(1, -1))).cuda()
@@ -96,7 +136,12 @@ if __name__ == '__main__':
 		w = model(x).cpu().detach().numpy().reshape(-1)
 		w = 0.5 - w
 
-		add_data_point(grb_model, z, w, y, arc, i)
+		add_data_point(grb_model, z, w, y, arc, i, slack = 2.0)
+
+	grb_model.setObjective(z[0])
+	grb_model.optimize()
+	constrs = grb_model.getConstrs()
+	print (len(constrs))
 
 	ones = np.ones(TrainSize)
 	print (np.c_[data_y[:TrainSize], ones].shape)
@@ -125,9 +170,29 @@ if __name__ == '__main__':
 		error += wrong
 	print ("Exact Match Accuracy: %d%%(%d/%d), average wrong: %f(%d/%d)"%(int(correct * 100 / cnt), correct, cnt, float(error) / float(cnt), error, cnt))
 
+	test_loader = loader(data_x[:TrainSize], data_y[:TrainSize], batch_size=1)
+	for x, y in test_loader:
+		wrong = 0
+
+		x = Variable(x).cuda()
+		y = y.long().squeeze()
+
+		output = model(x).squeeze()
+		prediction = np.where(output.cpu().detach().numpy() > 0.5, 1, 0) + 1e-3
+		prediction = torch.LongTensor(prediction)
+		wrong += (prediction != y).sum()
+
+		#print ("Test Case %d, wrong variable: %d"%(cnt, wrong))
+		cnt += 1
+		if wrong == 0:
+			correct += 1
+		error += wrong
+	print ("Exact Match Accuracy: %d%%(%d/%d), average wrong: %f(%d/%d)"%(int(correct * 100 / cnt), correct, cnt, float(error) / float(cnt), error, cnt))
+
+	
 	cnt = 0
-	correct = 0
-	error = 0
+	correct_u = correct_l = 0
+	error_u = error_l = 0
 	test_loader = loader(data_x[TrainSize:], data_y[TrainSize:], batch_size=1)
 	for x, y in test_loader:
 		wrong = 0
@@ -139,16 +204,17 @@ if __name__ == '__main__':
 		y = y.cpu().detach().numpy()
 		w = 0.5 - w
 
-		wrong = ILP_solve(grb_model, z, w, y, arc, 14, out_file)
+		wrong_u = ILP_solve_upper(grb_model, z, w, y, arc, 14, out_file)
+		wrong_l = ILP_solve_lower(data_y[:TrainSize], w, y, 14, out_file)
 
 		#print ("Test Case %d, wrong variable: %d"%(cnt, wrong))
 		cnt += 1
-		if wrong == 0:
-			correct += 1
-		error += wrong
-		if cnt % 10 == 0:
-			print ("%d:%d"%(cnt, wrong))
-	print ("Exact Match Accuracy: %d%%(%d/%d), average wrong: %f(%d/%d)"%(int(correct * 100 / cnt), correct, cnt, float(error) / float(cnt), error, cnt))
-
-	constrs = grb_model.getConstrs()
-	print (len(constrs))
+		if wrong_u == 0:
+			correct_u += 1
+		if wrong_l == 0:
+			correct_l += 1
+		error_u += wrong_u
+		error_l += wrong_l
+	print ("Upper Bound Exact Match Accuracy: %d%%(%d/%d), average wrong: %f"%(int(correct_u * 100 / cnt), correct_u, cnt, error_u / float(cnt)))
+	print ("Lower Bound Exact Match Accuracy: %d%%(%d/%d), average wrong: %f"%(int(correct_l * 100 / cnt), correct_l, cnt, error_l / float(cnt)))
+	

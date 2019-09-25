@@ -15,10 +15,10 @@ def init_GRB(arc, task):
 
 	return m, z
 
-def add_data_point(model, z, w, x, arc, cnt):
+def add_data_point(model, z, w, x, arc, cnt, slack=0):
 	tmp = sum([w[idx] * x[idx] for idx  in arc])
 	#print (tmp)
-	model.addConstr(sum(z[idx] * w[idx] for idx in arc) >= tmp, "data%d"%(cnt))
+	model.addConstr(sum(z[idx] * w[idx] for idx in arc) >= tmp - slack, "data%d"%(cnt))
 
 def add_equation_const(model, z, zero_space, one_to_two, dim):
 	theta = 1e-2
