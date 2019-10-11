@@ -5,7 +5,7 @@ import random
 import csv
 from scipy.linalg import null_space
 from NN_mst import myModel
-from learning import *
+from LatentLearning import *
 
 
 def get_data(csv_file):
@@ -39,6 +39,7 @@ def loader(data_x, data_y, batch_size):
 def ILP_solve_upper(model, z, w, x, arc, N, out_file):
 	model.setObjective(sum(z[idx] * w[idx] for idx in arc))
 	model.optimize()
+	obj = model.getObjective()
 
 	solution = np.zeros(N)
 	for v in model.getVars():
@@ -48,10 +49,10 @@ def ILP_solve_upper(model, z, w, x, arc, N, out_file):
 
 	wrong = 0
 	for i in range(N):
-		if solution[i] != x[i]:
+		if abs(solution[i] - x[i]) > 1e-6:
 			wrong += 1
 
-	return wrong
+	return wrong, obj.getValue()
 
 def ILP_solve_lower(data_x, w, x, N, out_file):
 	M = len(data_x)
@@ -66,23 +67,27 @@ def ILP_solve_lower(data_x, w, x, N, out_file):
 
 	wrong = 0
 	for i in range(N):
-		if solution[i] != x[i]:
+		if abs(solution[i] - x[i]) > 1e-6:
 			wrong += 1
 
-	return wrong
+	return wrong, opt_obj
 
 def label_hash(y):
-	h = 0
-	for i in range(14):
-		h += y[i] * (1 << i)
-	return h
+	hash_value = 0
+	for i in range(N):
+		hash_value += y[i] * (1 << i)
+	return hash_value
 
 if __name__ == '__main__':
 	DataDir = './data/Multi/yeast.csv'
-	TrainSize = 1500
-	out_file = open('./data/Multi/result.txt', 'w')
+	N = 15
+	TrainSize = 900
+	out_file = open('./data/Multi/result_sync.txt', 'w')
 	trainFlag = False
-	data_x, data_y = get_data(open(DataDir, 'r'))
+	latentFlag = True
+	#data_x, data_y = get_data(open(DataDir, 'r'))
+	data_x = np.load('./data/Multi/syn_test_w.npy')
+	data_y = np.load('./data/Multi/syn_test_x.npy')
 
 	label_set = set()
 	for i in range(TrainSize):
@@ -93,18 +98,24 @@ if __name__ == '__main__':
 	print (len(label_set))
 
 	arc = set()
-	for i in range(14):
+	for i in range(N):
 		arc.add(i)
-	grb_model, z = init_GRB(arc, task='multi')
 
-	model = myModel(103, 14)
+	grb_model, z = init_GRB(arc, task='Multi')
+
+	if latentFlag:
+		latent_indices, order_to_idx, idx_to_order, latent_dim = get_latent_indices(N, task='Multi')
+		latent_variables = add_latent_variables(grb_model, latent_indices)
+		add_latent_predefined(grb_model, z, latent_variables, N)
+
+	model = myModel(N, N)
 	model.cuda()
 
 	if trainFlag == True:
 
 		criterion = torch.nn.BCELoss() 
 
-		optimizer = torch.optim.Adam(model.parameters(), lr=0.002, weight_decay=0.0001)
+		optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
 		lossLog = []
 		for epoch in range(300):
@@ -124,19 +135,20 @@ if __name__ == '__main__':
 				total_loss += loss
 			print ('epoch %d, loss %.8f'%(epoch, total_loss / cnt))
 			lossLog.append(total_loss)
-		torch.save(model.state_dict(), './model/Multi/3layers.pt')
+		torch.save(model.state_dict(), './model/Multi/3layers_sync.pt')
 	else:
-		model.load_state_dict(torch.load('./model/Multi/3layers.pt'))
+		model.load_state_dict(torch.load('./model/Multi/3layers_sync.pt'))
 
 	model.eval()
-
+	
 	for i in range(TrainSize):
 		x = Variable(torch.Tensor(data_x[i].reshape(1, -1))).cuda()
 		y = data_y[i]
 		w = model(x).cpu().detach().numpy().reshape(-1)
 		w = 0.5 - w
+		w = 0.5 - data_x[i]
 
-		add_data_point(grb_model, z, w, y, arc, i, slack = 2.0)
+		add_data_point(grb_model, z, w, y, arc, i)
 
 	grb_model.setObjective(z[0])
 	grb_model.optimize()
@@ -146,8 +158,14 @@ if __name__ == '__main__':
 	ones = np.ones(TrainSize)
 	print (np.c_[data_y[:TrainSize], ones].shape)
 	zero_space = null_space(np.c_[data_y[:TrainSize], ones])
-	print (zero_space)
+	print (zero_space.shape)
 
+	if latentFlag:
+		data_latent = predefined_h_from_x(data_y[:TrainSize], N, latent_dim)
+		latent_zero_space = null_space(np.c_[data_latent, ones])
+		add_equation_const(grb_model, latent_variables, latent_zero_space, order_to_idx, latent_dim)
+		print (latent_zero_space.shape)
+	
 	cnt = 0
 	correct = 0
 	error = 0
@@ -169,7 +187,10 @@ if __name__ == '__main__':
 			correct += 1
 		error += wrong
 	print ("Exact Match Accuracy: %d%%(%d/%d), average wrong: %f(%d/%d)"%(int(correct * 100 / cnt), correct, cnt, float(error) / float(cnt), error, cnt))
-
+	'''
+	cnt = 0
+	correct = 0
+	error = 0
 	test_loader = loader(data_x[:TrainSize], data_y[:TrainSize], batch_size=1)
 	for x, y in test_loader:
 		wrong = 0
@@ -187,25 +208,31 @@ if __name__ == '__main__':
 		if wrong == 0:
 			correct += 1
 		error += wrong
-	print ("Exact Match Accuracy: %d%%(%d/%d), average wrong: %f(%d/%d)"%(int(correct * 100 / cnt), correct, cnt, float(error) / float(cnt), error, cnt))
+	print ("Exact Match Accuacy: %d%%(%d/%d), average wrong: %f(%d/%d)"%(int(correct * 100 / cnt), correct, cnt, float(error) / float(cnt), error, cnt))
+	'''
 
-	
 	cnt = 0
-	correct_u = correct_l = 0
-	error_u = error_l = 0
+	correct_u = correct_l = correct_m = 0
+	error_u = error_l = error_m = 0
 	test_loader = loader(data_x[TrainSize:], data_y[TrainSize:], batch_size=1)
 	for x, y in test_loader:
 		wrong = 0
 
-		x = Variable(x).cuda()
+		#x = Variable(x).cuda()
+		#w = model(x).cpu().detach().numpy().reshape(-1)
+		#w = 0.5 - w
 		y = y.long().squeeze()
-
-		w = model(x).cpu().detach().numpy().reshape(-1)
 		y = y.cpu().detach().numpy()
-		w = 0.5 - w
+		
+		w = 0.5 - x.cpu().detach().numpy().reshape(-1)
 
-		wrong_u = ILP_solve_upper(grb_model, z, w, y, arc, 14, out_file)
-		wrong_l = ILP_solve_lower(data_y[:TrainSize], w, y, 14, out_file)
+		wrong_u, obj_u = ILP_solve_upper(grb_model, z, w, y, arc, N, out_file)
+		wrong_l, obj_l = ILP_solve_lower(data_y[:TrainSize], w, y, N, out_file)
+
+		if obj_u > obj_l:
+			wrong_m = wrong_u
+		else:
+			wrong_m = wrong_l
 
 		#print ("Test Case %d, wrong variable: %d"%(cnt, wrong))
 		cnt += 1
@@ -213,8 +240,14 @@ if __name__ == '__main__':
 			correct_u += 1
 		if wrong_l == 0:
 			correct_l += 1
+		if wrong_m == 0:
+			correct_m += 1
 		error_u += wrong_u
 		error_l += wrong_l
+		error_m += wrong_m
+
+		if cnt % 10 == 0:
+			print ("%d cases processed!"%(cnt))
 	print ("Upper Bound Exact Match Accuracy: %d%%(%d/%d), average wrong: %f"%(int(correct_u * 100 / cnt), correct_u, cnt, error_u / float(cnt)))
 	print ("Lower Bound Exact Match Accuracy: %d%%(%d/%d), average wrong: %f"%(int(correct_l * 100 / cnt), correct_l, cnt, error_l / float(cnt)))
-	
+	print ("Mixed Solve Exact Match Accuracy: %d%%(%d/%d), average wrong: %f"%(int(correct_m * 100 / cnt), correct_m, cnt, error_m / float(cnt)))

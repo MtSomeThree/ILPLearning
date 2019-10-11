@@ -12,6 +12,18 @@ def init_GRB(arc, task):
 
 	if task == 'MST':
 		m.addConstrs((z[i, j] == z[j, i] for i, j in arc), "sym")
+	if task == 'Multi':
+
+		m.addConstr(z[11] == z[12], "obs3")
+		'''
+		m.addConstr(z[7] >= z[8], "obs1")
+		m.addConstr(z[9] >= z[10], "obs2")
+	
+		m.addConstr(z[3] + z[6] <= 1, "obs4")
+		m.addConstr(z[3] + z[8] <= 1, "obs5")
+		m.addConstr(z[8] + z[10] <= 1, "obs6")
+		m.addConstr(z[6] + z[9] <= 1, "obs6")
+		'''
 
 	return m, z
 
@@ -127,6 +139,25 @@ def lower_bound_solve(data_x, w, x, out_file):
 
 	return get_loss(solution, w, x, out_file)
 
+def check_set_size(matrix_w, matrix_x):
+	v = np.zeros(21)
+	length = matrix_x.shape[0]
+	timeList = []
+	for index in range(1 << 21):
+		timeFlag = -1
+		for i in range(21):
+			v[i] = int((index & (1 << i)) / (1 << i))
+		if (((1 << 17) - 1) & index) == 0:
+			print ("%d points checked!"%(index))
+		if v.sum() != 6:
+			continue
+		for i in range(length):
+			if (matrix_x[i] - v).dot(matrix_w[i]).sum() > 0:
+				timeFlag = i
+				break
+		timeList.append(timeFlag)
+	return timeList
+
 if __name__ == '__main__':	
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--N", type=int, default=7)
@@ -183,6 +214,10 @@ if __name__ == '__main__':
 	#set_size_evaluate(data_w, data_x)
 	matrix_w = np.array(matrix_w)
 	matrix_x = np.array(matrix_x)
+
+	timeList = check_set_size(matrix_w, matrix_x)
+	np.save('./data/MST/timeList.npy', timeList)
+
 	ones = np.ones(cnt)
 	zero_space = null_space(np.c_[matrix_x, ones])
 	if args.equation:

@@ -10,8 +10,8 @@ class myModel(torch.nn.Module):
 		self.linears = torch.nn.Sequential(
 			#torch.nn.Linear(input_dim, hidden_dim),
 			#torch.nn.ReLU(),
-			torch.nn.Linear(hidden_dim, hidden_dim),
-			torch.nn.ReLU(),
+			#torch.nn.Linear(hidden_dim, hidden_dim),
+			#torch.nn.ReLU(),                 
 			torch.nn.Linear(hidden_dim, output_dim),
 			torch.nn.Sigmoid()
 			)
