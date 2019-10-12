@@ -149,6 +149,10 @@ def check_set_size(matrix_w, matrix_x):
 			v[i] = int((index & (1 << i)) / (1 << i))
 		if (((1 << 14) - 1) & index) == 0:
 			print ("%d points checked!"%(index))
+			if index > 0:
+				np.save('./data/MST/timeList_part.npy', timeList)
+				return
+
 		if v.sum() != 6:
 			continue
 		for i in range(length):
