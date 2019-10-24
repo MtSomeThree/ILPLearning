@@ -144,7 +144,7 @@ def check_set_size(matrix_w, matrix_x):
 	length = matrix_x.shape[0]
 	timeList = []
 	for index in range(1 << 21):
-		timeFlag = -1
+		timeFlag = []
 		for i in range(21):
 			v[i] = int((index & (1 << i)) / (1 << i))
 		if (((1 << 14) - 1) & index) == 0:
@@ -153,8 +153,7 @@ def check_set_size(matrix_w, matrix_x):
 			continue
 		for i in range(length):
 			if (matrix_x[i] - v).dot(matrix_w[i]).sum() > 0:
-				timeFlag = i
-				break
+				timeFlag.append(i)
 		timeList.append(timeFlag)
 	return timeList
 
@@ -216,7 +215,7 @@ if __name__ == '__main__':
 	matrix_x = np.array(matrix_x)
 
 	timeList = check_set_size(matrix_w, matrix_x)
-	np.save('./data/MST/timeList.npy', timeList)
+	np.save('./data/MST/analysis.npy', timeList)
 
 	ones = np.ones(cnt)
 	zero_space = null_space(np.c_[matrix_x, ones])
