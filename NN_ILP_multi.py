@@ -80,18 +80,25 @@ def label_hash(y):
 
 if __name__ == '__main__':
 	DataDir = './data/Multi/yeast.csv'
-	N = 15
-	TrainSize = 900
+	N = 96
+	TrainSize = 10000
 	out_file = open('./data/Multi/result_sync.txt', 'w')
 	trainFlag = False
 	latentFlag = True
 	#data_x, data_y = get_data(open(DataDir, 'r'))
-	data_x = np.load('./data/Multi/syn_test_w.npy')
-	data_y = np.load('./data/Multi/syn_test_x.npy')
+	data_x = np.load('./data/Multi/ImCLEF07A_x.npy')
+	data_y = np.load('./data/Multi/ImCLEF07A_y.npy')
 
 	label_set = set()
+	indices_set = set()
 	for i in range(TrainSize):
 		label_set.add(label_hash(data_y[i]))
+		for j in range(96):
+			if data_y[i][j] < 0.5:
+				continue
+			for k in range(j + 1, 96):
+				if data_y[i][k] > 0.5:
+					indices_set.add((j, k)) 
 	print (len(label_set))
 	for i in range(TrainSize, data_x.shape[0]):
 		label_set.add(label_hash(data_y[i]))
@@ -104,11 +111,13 @@ if __name__ == '__main__':
 	grb_model, z = init_GRB(arc, task='Multi')
 
 	if latentFlag:
-		latent_indices, order_to_idx, idx_to_order, latent_dim = get_latent_indices(N, task='Multi')
+		latent_indices, order_to_idx, idx_to_order, latent_dim = get_latent_indices(N, task='Multi', indices_set=indices_set)
+		print ("Latent Dimension=%d"%(latent_dim))
+		print (latent_indices)
 		latent_variables = add_latent_variables(grb_model, latent_indices)
-		add_latent_predefined(grb_model, z, latent_variables, N)
+		add_latent_predefined(grb_model, z, latent_variables, indices_set)
 
-	model = myModel(N, N)
+	model = myModel(80, 96)
 	model.cuda()
 
 	if trainFlag == True:
@@ -118,7 +127,7 @@ if __name__ == '__main__':
 		optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
 		lossLog = []
-		for epoch in range(300):
+		for epoch in range(100):
 			total_loss = 0
 			cnt = 0
 			train_loader = loader(data_x[:TrainSize], data_y[:TrainSize], batch_size=50)
@@ -135,9 +144,9 @@ if __name__ == '__main__':
 				total_loss += loss
 			print ('epoch %d, loss %.8f'%(epoch, total_loss / cnt))
 			lossLog.append(total_loss)
-		torch.save(model.state_dict(), './model/Multi/3layers_sync.pt')
+		torch.save(model.state_dict(), './model/Multi/3layers_ImCLEF07A.pt')
 	else:
-		model.load_state_dict(torch.load('./model/Multi/3layers_sync.pt'))
+		model.load_state_dict(torch.load('./model/Multi/3layers_ImCLEF07A.pt'))
 
 	model.eval()
 	
@@ -146,9 +155,9 @@ if __name__ == '__main__':
 		y = data_y[i]
 		w = model(x).cpu().detach().numpy().reshape(-1)
 		w = 0.5 - w
-		w = 0.5 - data_x[i]
+		#w = 0.5 - data_x[i]
 
-		add_data_point(grb_model, z, w, y, arc, i)
+		#add_data_point(grb_model, z, w, y, arc, i)
 
 	grb_model.setObjective(z[0])
 	grb_model.optimize()
@@ -161,7 +170,7 @@ if __name__ == '__main__':
 	print (zero_space.shape)
 
 	if latentFlag:
-		data_latent = predefined_h_from_x(data_y[:TrainSize], N, latent_dim)
+		data_latent = predefined_h_from_x(data_y[:TrainSize], indices_set, latent_dim)
 		latent_zero_space = null_space(np.c_[data_latent, ones])
 		add_equation_const(grb_model, latent_variables, latent_zero_space, order_to_idx, latent_dim)
 		print (latent_zero_space.shape)
@@ -218,13 +227,13 @@ if __name__ == '__main__':
 	for x, y in test_loader:
 		wrong = 0
 
-		#x = Variable(x).cuda()
-		#w = model(x).cpu().detach().numpy().reshape(-1)
-		#w = 0.5 - w
+		x = Variable(x).cuda()
+		w = model(x).cpu().detach().numpy().reshape(-1)
+		w = 0.5 - w
 		y = y.long().squeeze()
 		y = y.cpu().detach().numpy()
 		
-		w = 0.5 - x.cpu().detach().numpy().reshape(-1)
+		#w = 0.5 - x.cpu().detach().numpy().reshape(-1)
 
 		wrong_u, obj_u = ILP_solve_upper(grb_model, z, w, y, arc, N, out_file)
 		wrong_l, obj_l = ILP_solve_lower(data_y[:TrainSize], w, y, N, out_file)

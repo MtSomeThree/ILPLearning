@@ -38,21 +38,19 @@ def add_equation_const(model, z, zero_space, one_to_two, dim):
 		model.addConstr(sum(z[idx] * w[idx] for idx in indices) >= tmp - theta)
 		model.addConstr(sum(z[idx] * w[idx] for idx in indices) <= tmp + theta)
 
-def add_latent_predefined(model, z, h, N):
-	for i in range(N):
-		for j in range(i + 1, N):
+def add_latent_predefined(model, z, h, latent_indices):
+	for i, j in latent_indices:
 			model.addConstr(h[i, j, 0] + h[i, j, 1] == 1 - z[i])
 			model.addConstr(h[i, j, 0] + h[i, j, 2] == 1 - z[j])
 			model.addConstr(h[i, j, 1] + h[i, j, 3] == z[j])
 			model.addConstr(h[i, j, 2] + h[i, j, 3] == z[i])
 			
-def predefined_h_from_x(x, N, latent_dim):
+def predefined_h_from_x(x, latent_indices, latent_dim):
 	length = x.shape[0]
 	h = np.zeros((length, latent_dim))
 	for idx in range(length):
 		cnt = 0
-		for i in range(N):
-			for j in range(i + 1, N):
+		for i, j in latent_indices:
 				k = int(x[idx][i] * 2 + x[idx][j])
 				h[idx][cnt * 4 + k] = 1
 				cnt += 1
@@ -90,21 +88,29 @@ def get_variable_indices(N, task):
 			indices.add((i, j))
 	return indices
 
-def get_latent_indices(N, task):
-	indices = set()
-
+def get_latent_indices(N, task, indices_set = None):
 	order_to_idx = dict()
 	idx_to_order = dict()
+	indices = set()
 
 	cnt = 0
 
-	for i in range(N):
-		for j in range(i + 1, N):
+	if indices_set is not None:
+		for i, j in indices_set:
 			for k in range(4):
-				indices.add((i, j, k))       # 0: 00, 1: 01, 2: 10, 3: 11
 				order_to_idx[cnt] = (i, j, k)
 				idx_to_order[(i, j, k)] = cnt
+				indices.add((i, j, k))
 				cnt += 1
+
+	else:
+		for i in range(N):
+			for j in range(i + 1, N):
+				for k in range(4):
+					indices.add((i, j, k))       # 0: 00, 1: 01, 2: 10, 3: 11
+					order_to_idx[cnt] = (i, j, k)
+					idx_to_order[(i, j, k)] = cnt
+					cnt += 1
 
 	return indices, order_to_idx, idx_to_order, cnt
 
