@@ -7,7 +7,6 @@ from scipy.linalg import null_space
 from NN_mst import myModel
 from LatentLearning import *
 
-
 def get_data(csv_file):
 	data = csv.reader(csv_file)
 	data_x = []
