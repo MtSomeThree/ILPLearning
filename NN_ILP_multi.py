@@ -155,8 +155,12 @@ if __name__ == '__main__':
 		w = model(x).cpu().detach().numpy().reshape(-1)
 		w = 0.5 - w
 		#w = 0.5 - data_x[i]
+		slack = 0.0
+		for j in range(TrainSize):
+			tmp = ((y - data_y[j]) * w).sum()
+			slack = max(slack, tmp)
 
-		add_data_point(grb_model, z, w, y, arc, i)
+		add_data_point(grb_model, z, w, y, arc, i, slack)
 
 	grb_model.setObjective(z[0])
 	grb_model.optimize()
