@@ -82,7 +82,7 @@ if __name__ == '__main__':
 	N = 96
 	TrainSize = 10000
 	out_file = open('./data/Multi/result_sync.txt', 'w')
-	trainFlag = False
+	trainFlag = True
 	latentFlag = True
 	#data_x, data_y = get_data(open(DataDir, 'r'))
 	data_x = np.load('./data/Multi/ImCLEF07A_x.npy')
@@ -98,10 +98,10 @@ if __name__ == '__main__':
 			for k in range(j + 1, 96):
 				if data_y[i][k] > 0.5:
 					indices_set.add((j, k)) 
-	print (len(label_set))
+	#print (len(label_set))
 	for i in range(TrainSize, data_x.shape[0]):
 		label_set.add(label_hash(data_y[i]))
-	print (len(label_set))
+	#print (len(label_set))
 
 	arc = set()
 	for i in range(N):
@@ -112,7 +112,7 @@ if __name__ == '__main__':
 	if latentFlag:
 		latent_indices, order_to_idx, idx_to_order, latent_dim = get_latent_indices(N, task='Multi', indices_set=indices_set)
 		print ("Latent Dimension=%d"%(latent_dim))
-		print (latent_indices)
+		#print (latent_indices)
 		latent_variables = add_latent_variables(grb_model, latent_indices)
 		add_latent_predefined(grb_model, z, latent_variables, indices_set)
 
