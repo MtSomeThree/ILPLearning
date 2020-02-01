@@ -8,6 +8,7 @@ def init_GRB(indices, task):
 	m = grb.Model('mst')
 	m.setParam("MIPGap", 0.0)
 	m.setParam("OutputFlag", 0)
+	m.setParam("TuneTimeLimit", 300)
 	z = m.addVars(indices, vtype=grb.GRB.BINARY, name='z')
 
 	if task == 'MST':
