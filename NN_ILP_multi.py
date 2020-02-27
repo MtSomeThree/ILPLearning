@@ -82,7 +82,7 @@ if __name__ == '__main__':
 	N = 96
 	TrainSize = 10000
 	out_file = open('./data/Multi/result_sync.txt', 'w')
-	trainFlag = False
+	trainFlag = True
 	latentFlag = False
 	#data_x, data_y = get_data(open(DataDir, 'r'))
 	data_x = np.load('./data/Multi/ImCLEF07A_x.npy')
@@ -143,9 +143,9 @@ if __name__ == '__main__':
 				total_loss += loss
 			print ('epoch %d, loss %.8f'%(epoch, total_loss / cnt))
 			lossLog.append(total_loss)
-		torch.save(model.state_dict(), './model/Multi/2layers_ImCLEF07A.pt')
+		torch.save(model.state_dict(), './model/Multi/2layers_ImCLEF07A7.pt')
 	else:
-		model.load_state_dict(torch.load('./model/Multi/3layers_ImCLEF07A.pt'))
+		model.load_state_dict(torch.load('./model/Multi/3layers_ImCLEF07A4.pt'))
 
 	model.eval()
 	

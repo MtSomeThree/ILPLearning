@@ -8,8 +8,8 @@ class myModel(torch.nn.Module):
 		super(myModel, self).__init__()
 		hidden_dim = input_dim
 		self.linears = torch.nn.Sequential(
-			torch.nn.Linear(input_dim, hidden_dim),
-			torch.nn.ReLU(),
+			#torch.nn.Linear(input_dim, hidden_dim),
+			#torch.nn.ReLU(),
 			torch.nn.Linear(hidden_dim, hidden_dim),
 			torch.nn.ReLU(),                 
 			torch.nn.Linear(hidden_dim, output_dim),
